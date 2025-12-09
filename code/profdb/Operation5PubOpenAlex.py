@@ -136,6 +136,17 @@ class OperationPubOpenAlex(OperationAbstract):
                     SELECT id_pub, doi, id_infoscience, title, abstract, year_issued, openalex_id FROM new_pub_df
                 ''')
 
+                # Link new publications to the professor (bulk)
+                df_sciper_pub = pd.DataFrame({
+                    'sciper': [sciper] * len(new_records),
+                    'id_pub': [r['id_pub'] for r in new_records]
+                })
+                self.con.register("new_sciper_pub_df", df_sciper_pub)
+                self.con.execute('''
+                    INSERT INTO sciper_pub (sciper, id_pub)
+                    SELECT sciper, id_pub FROM new_sciper_pub_df
+                ''')
+
 
 
 # -------- run --------
