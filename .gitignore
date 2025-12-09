@@ -1,0 +1,10 @@
+.env
+.venv
+/output/
+/input/
+/cache_embeddings.lmdb/
+*.lmdb
+*.lmdb/
+.idea/
+*.pyc
+/code/dspace-rest-python/

@@ -1,0 +1,13 @@
+services:
+  listprof:
+    container_name: listprof
+    image: listprof
+    user: "1002:1002"
+    build: .
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./output:/app/output
+      - ./input:/app/input
+      - ./cache_embeddings.lmdb:/app/cache_embeddings.lmdb
+    restart: unless-stopped
