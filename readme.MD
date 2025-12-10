@@ -1,18 +1,39 @@
-
-
-
-
 # ProfDB – EPFL Professor Data Pipeline
 
 ## Overview
 
-ProfDB is a data pipeline that takes an official list of EPFL professors (from a CSV export) and builds a consolidated DuckDB database with enriched information. The pipeline augments the professor list with their recent publications (from EPFL's Infoscience repository and OpenAlex) and researcher identifiers (OpenAlex author IDs and ORCIDs). The resulting DuckDB database can be served via a FastAPI service for convenient querying of professors and their publications. The goal is to make the data easily accessible through an API while keeping it up-to-date with minimal manual intervention.
+ProfDB is a data pipeline that takes an official list of EPFL professors (from a CSV export) and builds a consolidated DuckDB database with enriched information. The pipeline augments the professor list with their recent publications (from EPFL's Infoscience repository and OpenAlex) and researcher identifiers (OpenAlex author IDs and ORCIDs). We also calculate and store the embeddings for every publication. The resulting DuckDB database can be served via a FastAPI service for convenient querying of professors and their publications. The goal is to make the data easily accessible through an API and avoiding re-calculating the embeddings in every projects.
 
-## Input Data
+# Output 
 
-The pipeline starts with an official EPFL professor list CSV. This CSV is downloaded from EPFL's InfoView system and contains one row per professor with columns such as: `N° sciper` (unique ID), `email`, `Nom` (last name), `Prénom` (first name), `date création` (creation date), `classe acc.` (academic rank), `CF unité` (unit code), `Nom unité` (unit name), `fonction acc.` (role). These columns are required for the pipeline to run; the code will validate that they exist. Make sure your input CSV has these headers (in French, as in the official source).
+Let's start with the output: what is available once the pipeline was executed. 
 
-## Pipeline Steps
+## FastAPI Integration
+
+The API is self-documented here: 
+[http://itsisa0052.xaas.epfl.ch:5001/docs](http://itsisa0052.xaas.epfl.ch:5001/docs)
+
+## Output Structure
+
+After a successful run, your `output/latest` directory will contain:
+
+- **db.duckdb** – the DuckDB database file with all the tables (`prof`, `lab`, `sciper_lab`, `sciper_orcid_integration`, `pub`, `sciper_pub`, `sciper_openalex`, `orcid`, `orcid_links`, `pub_embedding`, and `metadata`). You can open this with DuckDB or any compatible tool to explore the data.
+
+- **db.log** – the log file capturing the pipeline execution details (useful for debugging or verifying that each step completed).
+
+- **input_prof.csv** – a copy of the input CSV that was used, for record-keeping.
+
+- **publications.parquet** – a Parquet file containing a flattened view of all professors' publications with selected fields. Each row in this file includes the professor's `sciper`, publication `title`, `abstract`, internal `id_pub`, the `source` of the record ("infoscience" or "openalex"), and the `embedding` vector. This file can be handy for quickly loading into analytics tools or for powering search functionality in the API.
+
+Additionally, the pipeline creates a timestamped archive on each run. For example, you might see folders like `output/db_20251208_013000/` (with a datetime stamp). These are copies of what was in `latest` at the moment of that run's completion. This versioning allows you to go back to previous snapshots if needed, while always having `output/latest` point to the most current data.
+
+
+
+# Processing Pipeline
+
+The pipeline starts with an official EPFL professor list CSV. This CSV is downloaded from EPFL's InfoView system and contains one row per professor with columns such as: `N° sciper` (unique ID), `email`, `Nom` (last name), `Prénom` (first name), `date création` (creation date), `classe acc.` (academic rank), `CF unité` (unit code), `Nom unité` (unit name), `fonction acc.` (role). These columns are required for the pipeline to run; the code will validate that they exist.
+
+## Description
 
 ### 1. Load Professors and Labs (CSV Ingestion)
 
@@ -26,15 +47,11 @@ These tables are written into the DuckDB database, with indexes on key fields (s
 
 ### 2. ORCID Integration Lookup
 
-Next, the pipeline fetches ORCID identifiers from EPFL's internal ORCID Integration service. It calls the ORCID integration API (an EPFL endpoint) to retrieve a JSON mapping of SCIPER IDs to ORCID iDs. The result is filtered to include only the ORCIDs for professors present in our `prof` table. This produces a table `sciper_orcid_integration` with columns `sciper` and `orcid` (one row per professor who has an ORCID in the integration system). An index on the `sciper` field is created for fast lookups.
+Next, the pipeline fetches ORCID identifiers from EPFL's internal ORCID Integration service; i.e., ORCID that were officially registered by professors.
 
 ### 3. Import Publications from Infoscience
 
-The pipeline then connects to Infoscience (EPFL's institutional repository on DSpace) to gather recent publications for each professor. Using the provided year range (e.g., 2025–2025 for only the year 2025), it queries Infoscience for all publications in that date range. For each publication found, it checks if any of the authors have a SCIPER ID matching one of our professors. If none of the authors are in our professor list, that publication is skipped.
-
-All qualifying publications are collected and assigned a new local publication ID (`id_pub`). Key metadata is stored: Infoscience ID/URL, DOI, title, abstract, and the publication date. At the same time, a `sciper_pub` association table is built to link each professor (sciper) to the publications (`id_pub`) they authored.
-
-After iterating through the results, the code creates a `pub` table in DuckDB with all collected publications and their metadata (including a computed `year_issued`), and a `sciper_pub` table linking professors to those publications. Indexes are added on publication IDs and sciper IDs for efficient joins.
+The pipeline then connects to Infoscience (EPFL's institutional repository on DSpace) to gather recent publications for each professor, using the provided year range (e.g., 2018–2025 by default).
 
 ### 4. Identify OpenAlex Author IDs
 
@@ -52,10 +69,6 @@ For each OpenAlex work found, the pipeline checks if that publication was alread
 
 - If a publication already exists (meaning it was in Infoscience data), the code updates that existing record: it fills in the OpenAlex work ID and adds the abstract if our record lacked one.
 - If the publication is new (not in Infoscience), it is added as a new entry to the `pub` table with a fresh `id_pub`, marking `id_infoscience` as `NULL` (since it's not in the internal repository). The new entry includes the DOI, title, abstract (reconstructed from OpenAlex's data), publication year, and OpenAlex work ID.
-
-(Under the hood, the OpenAlex response provides an abstract inversion index, which the code reverses to construct the abstract text, and the titles are cleaned of special characters.)
-
-> **Note:** Each new OpenAlex-sourced publication should also be linked to the professor in the `sciper_pub` table – since these were fetched per professor, we infer that these works belong to that professor's record. (The code ensures no duplicates and handles cases where Infoscience and OpenAlex overlap for the same work.)
 
 ### 6. Fetch ORCID Profiles
 
@@ -88,33 +101,17 @@ It then generates a convenient Parquet file of all publications with embeddings:
 
 Finally, to keep an archive of past runs, the entire `latest` folder is copied to a new folder named with a timestamp (e.g., `output/db_20251208_013000/` etc.). In this way, the most recent output is always in `output/latest`, and previous snapshots are retained (timestamped by run date and time). The pipeline also writes a small metadata table inside the DuckDB with the timestamp and total processing time of the run, for auditing purposes.
 
-## Usage and Reusability
 
-### Running the Pipeline
-
-You can run the pipeline by instantiating the `ProfDB` class and calling its `build()` method. For example, in Python:
-
-```python
-from code.profdb import ProfDB
-
-csv_path = "input/professors_list.csv"  # path to the EPFL professor list CSV
-profdb = ProfDB(csv_path, year_min=2025, year_max=2025)
-profdb.build()
-```
-
-This will execute all the steps described above, using the CSV as input and the year range 2025–2025 for publications (you can adjust the years as needed). After running, check the `output/latest/` directory for the results.
-
-### Requirements
+## Requirements to run the Pipeline
 
 Ensure you have network access to the required services:
 
-- **Infoscience DSpace API:** The code uses an EPFL DSpace REST client to query publications. You might need appropriate network access or credentials (the code calls `DSpaceClient().authenticate()` by default, which for EPFL internal usage should suffice).
+- **Infoscience DSpace API:** The code uses an EPFL DSpace REST client to query publications (API key required). The pipeline will read `DS_API_TOKEN` (can be retrieved on Infoscience) `DS_API_ENDPOINT` (probably: https://infoscience.epfl.ch/server/api)
+DS_API_ENDPOINT=
 
 - **OpenAlex API:** No special credentials are required, but an OpenAlex API key is recommended to increase request limits. The pipeline will read an `API_KEY_OPENALEX` from your environment (e.g., a `.env` file) if provided. Make sure to set this environment variable with your OpenAlex key (or add it to a `.env` file in the working directory).
 
-- **ORCID API:** The ORCID public API is used (no auth token needed for public data). The code simply makes GET requests to `pub.orcid.org` for each ORCID ID.
-
-- **OpenAI API:** An OpenAI API key is required for the embeddings step. Set the `OPENAI_API_KEY` environment variable before running, so that the OpenAI Python client can authenticate. If you don't have this or don't want to generate embeddings, you could disable or remove the embedding step, but by default it will try to run it.
+- **OpenAI API:** An OpenAI API key is required for the embeddings step. Set the `OPENAI_API_KEY` environment variable before running, so that the OpenAI Python client can authenticate. 
 
 You need a .env file at the root with the following info:
 ```bash
@@ -123,44 +120,21 @@ DS_API_ENDPOINT=https://infoscience.epfl.ch/server/api
 OPENAI_API_KEY=sk-proj-qX2...
 API_KEY_OPENALEX=wUpK...
 ```
-The tool should work too without the API_KEY_OPENALEX (nice-to-have)
 
-### Docker Usage
+## Running the Pipeline
 
-To facilitate reusability and scheduling, you can run this pipeline in a Docker container. Build the Docker image from the repository root (assuming the code and a proper Dockerfile are present) with a command such as:
+You can run the pipeline by instantiating the `ProfDB` class and calling its `build()` method. For example, in Python:
 
-```bash
-docker build -t profdb-pipeline .
+```python
+from code.profdb import ProfDB
+
+csv_path = "input/professors_list.csv"  # path to the EPFL professor list CSV
+profdb = ProfDB(csv_path, year_min=2018, year_max=2025)
+profdb.build()
 ```
 
-This will create an image with the pipeline. You can then run the container, mounting the input and output directories as needed. For example:
+This will execute all the steps described above, using the CSV as input and the year range 2025–2025 for publications (you can adjust the years as needed). After running, check the `output/latest/` directory for the results.
 
-```bash
-docker run --rm -v /path/to/input:/app/input -v /path/to/output:/app/output profdb-pipeline
-```
+## Cron
 
-This assumes the Dockerfile is set up to copy the code and run the `ProfDB.build()` on container start. The above command mounts your local input folder (containing the CSV) and an output folder to persist results outside the container. Adjust paths and image name as appropriate.
-
-The pipeline is designed to run to completion and then exit, so it fits well with a batch job or cron schedule. (In our case, we schedule it to run every week on Sunday night to refresh the data automatically.)
-
-### FastAPI Integration
-
-The API is self-documented here: 
-[http://itsisa0052.xaas.epfl.ch:5001/docs](http://itsisa0052.xaas.epfl.ch:5001/docs)
-
-
-## Output Structure
-
-After a successful run, your `output/latest` directory will contain:
-
-- **db.duckdb** – the DuckDB database file with all the tables (`prof`, `lab`, `sciper_lab`, `sciper_orcid_integration`, `pub`, `sciper_pub`, `sciper_openalex`, `orcid`, `orcid_links`, `pub_embedding`, and `metadata`). You can open this with DuckDB or any compatible tool to explore the data.
-
-- **db.log** – the log file capturing the pipeline execution details (useful for debugging or verifying that each step completed).
-
-- **input_prof.csv** – a copy of the input CSV that was used, for record-keeping.
-
-- **publications.parquet** – a Parquet file containing a flattened view of all professors' publications with selected fields. Each row in this file includes the professor's `sciper`, publication `title`, `abstract`, internal `id_pub`, the `source` of the record ("infoscience" or "openalex"), and the `embedding` vector. This file can be handy for quickly loading into analytics tools or for powering search functionality in the API.
-
-Additionally, the pipeline creates a timestamped archive on each run. For example, you might see folders like `output/db_20251208_013000/` (with a datetime stamp). These are copies of what was in `latest` at the moment of that run's completion. This versioning allows you to go back to previous snapshots if needed, while always having `output/latest` point to the most current data.
-
-
+The shell script in [start.sh](start.sh) defines a Cron job to run every week so the entire pipeline is run automatically every week.
