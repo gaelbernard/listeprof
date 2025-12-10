@@ -40,6 +40,11 @@ class OperationProf(OperationAbstract):
             "CF unité",
             "Nom unité",
             "fonction acc.",
+            "Type unité",
+            "CF niveau 2",
+            "CF niveau 3",
+            "Sigle niveau 2",
+            "Sigle niveau 3",
         ]
         missing = set(columns_needed) - set(master_list.columns)
         if missing:
@@ -62,12 +67,17 @@ class OperationProf(OperationAbstract):
         )
         prof["creation_date"] = pd.to_datetime(prof["creation_date"], format="%Y/%m/%d %H:%M:%S")
 
-        # Build lab table
+        # Build lab table (with hierarchy info)
         lab = (
             master_list.rename(columns={
                 "CF unité": "cf",
-                "Nom unité": "unit_name"
-            })[["cf", "unit_name"]]
+                "Nom unité": "unit_name",
+                "Type unité": "unit_type",
+                "CF niveau 2": "cf_level_2",
+                "CF niveau 3": "cf_level_3",
+                "Sigle niveau 2": "acronym_level_2",
+                "Sigle niveau 3": "acronym_level_3",
+            })[["cf", "unit_name", "unit_type", "cf_level_2", "cf_level_3", "acronym_level_2", "acronym_level_3"]]
             .drop_duplicates()
         )
 

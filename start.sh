@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Every Monday at 2am
-echo "45 9 * * 2 cd /app && export \$(cat .env | xargs) && /usr/local/bin/python3 main.py >> /var/log/pipeline.log 2>&1
+echo "0 1 * * * cd /app && export \$(cat .env | xargs) && /usr/local/bin/python3 main.py >> /var/log/pipeline.log 2>&1
 " | crontab -
 
 # Start cron daemon
