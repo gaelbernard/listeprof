@@ -57,6 +57,11 @@ class EmbeddingService:
             else:
                 texts_to_embed.append((i, text))
 
+        n_cached = len(texts) - len(texts_to_embed)
+        n_to_compute = len(texts_to_embed)
+        if len(texts) > 1:  # Don't log for single embeddings
+            logging.info(f"Embeddings: {n_cached} from cache, {n_to_compute} to compute")
+
         # Embed uncached texts in batches
         for chunk in chunked(texts_to_embed, self.batch_size):
             indices = [item[0] for item in chunk]

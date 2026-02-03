@@ -13,3 +13,4 @@ numpy~=2.0.2
 lmdb
 openai
 pyarrow
+scikit-learn

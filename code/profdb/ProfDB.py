@@ -52,6 +52,8 @@ class ProfDB:
     def build(self):
         t = time.time()
 
+        self.logging.info(f"Start pipeline for time range: {self.year_min}-{self.year_max}")
+
         OperationProf(self.db_path, self.csv_path).run()
         OperationOrcidIntegration(self.db_path).run()
         OperationPub(self.db_path, self.year_min, self.year_max).run()

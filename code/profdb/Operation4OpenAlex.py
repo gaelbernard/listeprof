@@ -55,6 +55,7 @@ class OperationOpenAlexID(OperationAbstract):
 
         # Step 1: infer openalex ids from dois
         self.sciper_dois_name['name_clean'] = self.sciper_dois_name['name'].apply(self.standardize_name)
+
         prof_openalex_ids = []
         for _, row in self.sciper_dois_name.iterrows():
             sciper = row['sciper']
@@ -64,6 +65,7 @@ class OperationOpenAlexID(OperationAbstract):
                     'sciper': sciper,
                     'openalex_id': oaid
                 })
+
         prof_openalex_ids = pd.DataFrame(prof_openalex_ids)
         # Apply manual correction
         corrections = pd.DataFrame([
@@ -77,6 +79,7 @@ class OperationOpenAlexID(OperationAbstract):
         logging.info(f"Successfully retrieved {prof_openalex_ids.shape[0]} OpenAlex IDs for profs")
 
         details = pd.DataFrame(self.get_openalex_details(prof_openalex_ids['openalex_id'].tolist()))
+
 
         # Adding the sciper info
         details = prof_openalex_ids.merge(details, left_on='openalex_id', right_on='id', how='inner')
@@ -193,13 +196,14 @@ class OperationOpenAlexID(OperationAbstract):
         return []
 
     def get_openalex_details(self, list_openAlex_ids, MAX_BATCH_SIZE=50):
+        assert MAX_BATCH_SIZE < 50
 
         output = []
         for batch_openAlex_ids in chunked(list_openAlex_ids, MAX_BATCH_SIZE):
             if api_key_openalex:
-                url = f"https://api.openalex.org/authors?filter=id:{'|'.join(batch_openAlex_ids)}&api_key={api_key_openalex}"
+                url = f"https://api.openalex.org/authors?filter=id:{'|'.join(batch_openAlex_ids)}&api_key={api_key_openalex}&per_page={MAX_BATCH_SIZE}"
             else:
-                url = f"https://api.openalex.org/authors?filter=id:{'|'.join(batch_openAlex_ids)}"
+                url = f"https://api.openalex.org/authors?filter=id:{'|'.join(batch_openAlex_ids)}&per_page={MAX_BATCH_SIZE}"
             i = 0
             while True:
                 try:
@@ -220,6 +224,6 @@ class OperationOpenAlexID(OperationAbstract):
 
 # -------- run --------
 if __name__ == "__main__":
-    DB = "../../temp.duckdb"
+    DB = "/data/gael/2025-10-08-listProf/output/db_20260201_023025/db.duckdb"
     #2024-12-01 TO 2024-12-03
     OperationOpenAlexID(DB).run()

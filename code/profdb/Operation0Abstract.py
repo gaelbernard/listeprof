@@ -5,7 +5,7 @@ class OperationAbstract(ABC):
     def __init__(self, db_path: str):
         self.con_path = db_path
         self.con = duckdb.connect(db_path)
-        self.sample = True
+        self.sample = False
 
     def pre_abstract(self):
         """Always run before pre()."""

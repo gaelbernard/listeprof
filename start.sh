@@ -1,11 +1,18 @@
 #!/bin/bash
 
-# Every Monday at 2am
-echo "0 1 * * * cd /app && export \$(cat .env | xargs) && /usr/local/bin/python3 main.py >> /var/log/pipeline.log 2>&1
-" | crontab -
+# Create log file
+touch /var/log/pipeline.log
+
+# Every day at 1am
+echo "0 1 * * * cd /app && export \$(cat .env | xargs) && /usr/local/bin/python3 main.py >> /var/log/pipeline.log 2>&1" | crontab -
 
 # Start cron daemon
-cron
+service cron start
+
+# Verify cron is running
+if ! pgrep cron > /dev/null; then
+    echo "ERROR: Failed to start cron daemon"
+fi
 
 # Run the pipeline once at startup if no database exists
 if [ ! -f "/app/output/latest/db.duckdb" ]; then

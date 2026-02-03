@@ -2,7 +2,6 @@ services:
   listprof:
     container_name: listprof
     image: listprof
-    user: "1002:1002"
     build: .
     ports:
       - "5001:5001"
