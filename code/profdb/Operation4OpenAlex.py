@@ -196,7 +196,7 @@ class OperationOpenAlexID(OperationAbstract):
         return []
 
     def get_openalex_details(self, list_openAlex_ids, MAX_BATCH_SIZE=50):
-        assert MAX_BATCH_SIZE < 50
+        assert MAX_BATCH_SIZE <= 50
 
         output = []
         for batch_openAlex_ids in chunked(list_openAlex_ids, MAX_BATCH_SIZE):

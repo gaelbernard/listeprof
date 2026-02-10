@@ -30,13 +30,29 @@ class OperationAbstract(ABC):
             self.trans()
             self.con.execute("COMMIT")
             self.post_abstract()
+
         except Exception as e:
-            self.con.execute("ROLLBACK")
-            self._quit_on_failure(f'Pipeline failed: {e}')
+            # 1) Try rollback, but never let rollback errors mask the real error
+            try:
+                self.con.execute("ROLLBACK")
+            except Exception:
+                logging.exception("ROLLBACK failed (ignoring to show original error)")
+
+            # 2) Print full stack trace to logs
+            logging.exception("Pipeline failed with an exception")  # includes stack trace
+
+            # 3) Keep your existing failure handler
+            self._quit_on_failure(f"Pipeline failed: {e}")
+
+            # 4) Re-raise original exception with its traceback
             raise
+
         finally:
-            if self.con:
-                self.con.close()
+            try:
+                if getattr(self, "con", None):
+                    self.con.close()
+            except Exception:
+                logging.exception("Failed to close DB connection")
 
     def _quit_on_failure(self, error_msg=None):
         if error_msg:

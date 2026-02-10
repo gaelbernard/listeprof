@@ -106,10 +106,12 @@ class ProfDB:
         # Make a publication parquet
         con = duckdb.connect(f'{final_folder}/db.duckdb')
         df = con.execute("""
-         SELECT sciper,
+          SELECT sciper,
                 title,
                 abstract,
                 id_pub,
+                pub.year_issued as year,
+                pub.doi as doi,
                 CASE
                     WHEN id_infoscience IS NOT NULL THEN 'infoscience'
                     ELSE 'openalex'
