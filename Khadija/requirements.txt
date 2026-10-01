@@ -1,0 +1,2 @@
+python-dotenv~=1.2.1
+git+https://github.com/epfllibrary/dspace-rest-python.git@dev

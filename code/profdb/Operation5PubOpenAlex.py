@@ -7,6 +7,7 @@ import requests
 from code.profdb.utils import *
 import unicodedata
 from dotenv import load_dotenv
+import time
 load_dotenv()
 
 api_key_openalex = os.getenv('API_KEY_OPENALEX')
@@ -36,25 +37,54 @@ class OperationPubOpenAlex(OperationAbstract):
         cursor = '*'
         results = []
 
+        max_retries = 10
+        base_wait = 60  # seconds
+
         while cursor:
-            url = (
-                f'https://api.openalex.org/works?'
-                f'filter=author.id:{author_id},'
-                f'publication_year:{self.year_min}-{self.year_max},'
-                f'type:article|book|book-chapter'
-                f'&include_xpac=true&cursor={cursor}&per-page=50'
-            )
-            if api_key_openalex:
-                url += f'&api_key={api_key_openalex}'
+            attempt = 0
 
-            response = requests.get(url)
-            if response.status_code != 200:
-                logging.warning(f"OpenAlex API error {response.status_code} for author {author_id}")
+            while attempt < max_retries:
+                url = (
+                    f'https://api.openalex.org/works?'
+                    f'filter=author.id:{author_id},'
+                    f'publication_year:{self.year_min}-{self.year_max},'
+                    f'type:article|book|book-chapter'
+                    f'&include_xpac=true&cursor={cursor}&per-page=50'
+                )
+                if api_key_openalex:
+                    url += f'&api_key={api_key_openalex}'
+
+                try:
+                    response = requests.get(url, timeout=60)
+
+                    if response.status_code == 200:
+                        data = response.json()
+                        results.extend(data.get('results') or [])
+                        cursor = data.get('meta', {}).get('next_cursor')
+                        break  # success → exit retry loop
+
+                    logging.warning(
+                        f"OpenAlex API error {response.status_code} "
+                        f"for author {author_id}, attempt {attempt + 1}/{max_retries}"
+                    )
+
+                except requests.RequestException as e:
+                    logging.warning(
+                        f"OpenAlex request failed for author {author_id}, "
+                        f"attempt {attempt + 1}/{max_retries}: {e}"
+                    )
+
+                wait_time = base_wait * (2 ** attempt)
+                logging.info(f"Retrying in {wait_time} seconds…")
+                time.sleep(wait_time)
+                attempt += 1
+
+            else:
+                # Exhausted retries for this cursor page
+                logging.error(
+                    f"Giving up after {max_retries} retries for author {author_id}, cursor={cursor}"
+                )
                 break
-
-            data = response.json()
-            results.extend(data.get('results') or [])
-            cursor = data.get('meta', {}).get('next_cursor')
 
         return results
 

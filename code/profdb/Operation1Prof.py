@@ -114,6 +114,6 @@ class OperationProf(OperationAbstract):
 
 # -------- run --------
 if __name__ == "__main__":
-    CSV = "../../pipeline/input/List of professors (Gaël_labList incl. SPC).csv"
+    CSV = "../../input/List_of_professors_(Gael_labList_incl._SPC).csv"
     DB = "../../temp.duckdb"
     OperationProf(DB, CSV).run()

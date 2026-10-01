@@ -15,6 +15,13 @@ from dotenv import load_dotenv
 from pathlib import Path
 from fastapi.responses import RedirectResponse
 import os
+from pydantic import BaseModel, Field
+from fastapi.middleware.cors import CORSMiddleware
+import io
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+import csv
+from fastapi.staticfiles import StaticFiles
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(Path(PROJECT_ROOT) / ".env")
@@ -25,6 +32,16 @@ app = FastAPI(
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
+)
+app.mount("/console", StaticFiles(directory="static", html=True), name="static")
+
+
+# Add CORS so the HTML frontend can talk to the API
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # tighten in production
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -445,6 +462,82 @@ def search_prof_by_topic(
         output.append(prof)
 
     return build_response(output, last_update)
+
+
+'''
+This block is for the SQL query navigator
+'''
+
+# ── Models & constants ─────────────────────────────────────────────────────────
+class SQLQuery(BaseModel):
+    query: str
+    display_limit: int = Field(default=1000, ge=1, le=10000)
+class SQLQueryCSV(BaseModel):
+    query: str
+BLOCKED_KEYWORDS = {"INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "CREATE", "TRUNCATE", "REPLACE", "MERGE", "ATTACH", "COPY", "EXPORT"}
+def _validate_sql(sql: str) -> str:
+    sql = sql.strip().rstrip(";")
+    tokens = set(sql.upper().split())
+    if tokens & BLOCKED_KEYWORDS:
+        raise HTTPException(status_code=400, detail="Only read-only queries are allowed.")
+    return sql
+@app.post("/sql", summary="Execute a read-only SQL query (display-limited)")
+def execute_sql(body: SQLQuery):
+    """
+    Run a SELECT query. Returns at most `display_limit` rows for display,
+    plus `total_rows` so the frontend knows if results were truncated.
+    """
+    sql = _validate_sql(body.query)
+
+    try:
+        con = get_connection()
+    except FileNotFoundError:
+        raise HTTPException(status_code=503, detail="Database not ready")
+
+    try:
+        result = con.execute(sql)
+        columns = [desc[0] for desc in result.description]
+        all_rows = result.fetchall()
+        total_rows = len(all_rows)
+        display_rows = all_rows[:body.display_limit]
+        rows = [dict(zip(columns, row)) for row in display_rows]
+        return {"columns": columns, "rows": rows, "total_rows": total_rows}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        con.close()
+@app.post("/sql/csv", summary="Download full query results as CSV")
+def execute_sql_csv(body: SQLQueryCSV):
+    """Run a SELECT query and return the complete result set as CSV."""
+    sql = _validate_sql(body.query)
+
+    try:
+        con = get_connection()
+    except FileNotFoundError:
+        raise HTTPException(status_code=503, detail="Database not ready")
+
+    try:
+        result = con.execute(sql)
+        columns = [desc[0] for desc in result.description]
+        all_rows = result.fetchall()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        con.close()
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(columns)
+    for row in all_rows:
+        writer.writerow(row)
+    output.seek(0)
+    return StreamingResponse(
+        output,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=query_result.csv"},
+    )
+'''
+END : query navigator
+'''
 
 
 if __name__ == "__main__":

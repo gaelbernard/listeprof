@@ -86,6 +86,6 @@ select distinct orcid from orcid_list;
 
 
 if __name__ == "__main__":
-    CSV = "../../pipeline/input/List of professors (Gaël_labList incl. SPC).csv"
+    CSV = "../../input/List_of_professors_(Gael_labList_incl._SPC).csv"
     DB = "/Users/gaeberna/EPFL-local/2025-10-08-listProf/output/db_20251203_111132/db.duckdb"
     OperationOrcid(DB).run()

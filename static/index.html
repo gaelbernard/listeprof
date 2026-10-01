@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ListProfConsole</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0c0e13;
+    --surface: #13161d;
+    --surface-2: #1a1e28;
+    --border: #252a36;
+    --border-focus: #f59e0b;
+    --text: #e2e4e9;
+    --text-muted: #6b7280;
+    --accent: #f59e0b;
+    --accent-dim: rgba(245, 158, 11, 0.12);
+    --error: #ef4444;
+    --error-dim: rgba(239, 68, 68, 0.1);
+    --green: #22c55e;
+    --green-dim: rgba(34, 197, 94, 0.1);
+    --radius: 10px;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Subtle grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(245, 158, 11, 0.015) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(245, 158, 11, 0.015) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .app {
+    position: relative;
+    z-index: 1;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 32px 24px;
+  }
+
+  /* Header */
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+
+  .logo {
+    width: 42px;
+    height: 42px;
+    background: var(--accent);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 18px;
+    color: var(--bg);
+    flex-shrink: 0;
+  }
+
+  .header-text h1 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+  }
+
+  .header-text p {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+
+  .api-url-bar {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+
+  .api-url-bar label {
+    color: var(--text-muted);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .api-url-bar input {
+    background: transparent;
+    border: none;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    width: 240px;
+    outline: none;
+  }
+
+  /* Schema toggle */
+  .schema-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+
+  .schema-toggle button {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-muted);
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .schema-toggle button:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .schema-toggle button.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-dim);
+  }
+
+  .schema-toggle .chevron {
+    transition: transform 0.2s;
+    font-size: 11px;
+  }
+
+  .schema-toggle button.active .chevron {
+    transform: rotate(180deg);
+  }
+
+  .schema-toggle a {
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 500;
+    color: #818cf8;
+    text-decoration: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: 1px solid rgba(129, 140, 248, 0.3);
+    background: rgba(129, 140, 248, 0.08);
+    transition: all 0.15s;
+  }
+
+  .schema-toggle a:hover {
+    border-color: #818cf8;
+    background: rgba(129, 140, 248, 0.15);
+    color: #a5b4fc;
+  }
+
+  .schema-panel {
+    display: none;
+    margin-bottom: 24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: auto;
+    max-height: 500px;
+    animation: fadeIn 0.2s ease;
+    padding: 16px;
+  }
+
+  .schema-panel.open {
+    display: block;
+  }
+
+  .schema-panel img {
+    height: auto;
+    max-width: 100%;
+    display: block;
+  }
+
+  /* Editor Section */
+  .editor-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 24px;
+  }
+
+  .editor-toolbar {
+    display: flex;
+    align-items: center;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    gap: 10px;
+  }
+
+  .editor-toolbar .title {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .editor-area {
+    position: relative;
+  }
+
+  textarea {
+    width: 100%;
+    min-height: 180px;
+    padding: 20px;
+    background: transparent;
+    border: none;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 14px;
+    line-height: 1.7;
+    resize: vertical;
+    outline: none;
+    tab-size: 2;
+  }
+
+  textarea::placeholder {
+    color: var(--text-muted);
+    opacity: 0.5;
+  }
+
+  /* Action bar */
+  .action-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    background: rgba(0,0,0,0.15);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 20px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .btn-run {
+    background: var(--accent);
+    color: var(--bg);
+  }
+
+  .btn-run:hover {
+    background: #eab308;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(245, 158, 11, 0.3);
+  }
+
+  .btn-run:active { transform: translateY(0); }
+
+  .btn-run:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+
+  .btn-outline {
+    background: transparent;
+    border-color: var(--border);
+    color: var(--text-muted);
+  }
+
+  .btn-outline:hover {
+    border-color: var(--text-muted);
+    color: var(--text);
+  }
+
+  .btn-csv {
+    background: var(--green-dim);
+    border-color: rgba(34, 197, 94, 0.25);
+    color: var(--green);
+  }
+
+  .btn-csv:hover {
+    border-color: var(--green);
+    background: rgba(34, 197, 94, 0.18);
+  }
+
+  .shortcut {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 2px 6px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 4px;
+    color: inherit;
+    opacity: 0.7;
+  }
+
+  .status {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--text-muted);
+    font-family: var(--mono);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .status .indicator {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--text-muted);
+  }
+
+  .status .indicator.success { background: var(--green); }
+  .status .indicator.error { background: var(--error); }
+  .status .indicator.loading {
+    background: var(--accent);
+    animation: pulse 1s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* Results */
+  .results-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    animation: fadeIn 0.2s ease;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .results-header {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    gap: 12px;
+  }
+
+  .results-header .tag {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-weight: 500;
+  }
+
+  .tag-rows {
+    background: var(--accent-dim);
+    color: var(--accent);
+  }
+
+  .tag-cols {
+    background: rgba(99, 102, 241, 0.12);
+    color: #818cf8;
+  }
+
+  .tag-time {
+    background: rgba(255,255,255,0.05);
+    color: var(--text-muted);
+  }
+
+  .tag-truncated {
+    background: rgba(245, 158, 11, 0.08);
+    color: var(--accent);
+  }
+
+  .tag-truncated {
+    background: var(--accent-dim);
+    color: var(--accent);
+    font-family: var(--sans);
+    font-style: italic;
+  }
+
+  .table-wrap {
+    overflow: auto;
+    max-height: 65vh;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  thead {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+
+  th {
+    background: var(--surface-2);
+    padding: 10px 16px;
+    text-align: left;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+    user-select: none;
+  }
+
+  td {
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text);
+    max-width: 400px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  tr:hover td {
+    background: rgba(245, 158, 11, 0.03);
+  }
+
+  td.null-val {
+    color: var(--text-muted);
+    font-style: italic;
+    opacity: 0.5;
+  }
+
+  /* Error */
+  .error-box {
+    padding: 20px;
+    background: var(--error-dim);
+    border-left: 3px solid var(--error);
+    margin: 16px;
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: #fca5a5;
+    line-height: 1.6;
+    white-space: pre-wrap;
+  }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center;
+    padding: 80px 20px;
+    color: var(--text-muted);
+  }
+
+  .empty-state .icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.3;
+  }
+
+  .empty-state p {
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  .empty-state kbd {
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 3px 8px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+
+  /* Example queries */
+  .examples {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 16px;
+    justify-content: center;
+  }
+
+  .example-chip {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 6px 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .example-chip:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-dim);
+  }
+
+  /* Schema thumbnail */
+  .schema-thumb {
+    position: relative;
+    width: 180px;
+    height: 120px;
+    margin-bottom: 24px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    flex-shrink: 0;
+  }
+
+  .schema-thumb:hover {
+    border-color: var(--accent);
+    box-shadow: 0 2px 12px rgba(245, 158, 11, 0.15);
+  }
+
+  .schema-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top left;
+    display: block;
+  }
+
+  .thumb-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(12, 14, 19, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+
+  .schema-thumb:hover .thumb-overlay {
+    opacity: 1;
+  }
+
+  .thumb-overlay span {
+    font-family: var(--sans);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent);
+    background: rgba(12, 14, 19, 0.8);
+    padding: 4px 10px;
+    border-radius: 6px;
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .api-url-bar { display: none; }
+    .app { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="header">
+    <div class="logo">db</div>
+    <div class="header-text">
+      <h1>ListProfConsole</h1>
+      <p>Query the ListProf database directly</p>
+    </div>
+    <div class="api-url-bar">
+      <label>API</label>
+      <input type="text" id="apiUrl" value="" spellcheck="false">
+    </div>
+  </div>
+
+  <div class="schema-toggle">
+    <button id="schemaBtn" onclick="toggleSchema()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      Schema
+      <span class="chevron">▼</span>
+    </button>
+    <a href="https://dbdiagram.io/d/699ec3c8bd82f5fce2c6f8d3" target="_blank" rel="noopener">
+      ↗ dbdiagram.io
+    </a>
+    <a href="https://go.epfl.ch/ListeProfs" target="_blank" rel="noopener">
+      ↗ API (go.epfl.ch/ListeProfs)
+    </a>
+  </div>
+
+  <!-- Schema thumbnail (always visible, click to expand) -->
+  <div class="schema-thumb" onclick="toggleSchema()">
+    <img src="schema.png" alt="Database schema diagram">
+    <div class="thumb-overlay">
+      <span>🔍 Click to expand</span>
+    </div>
+  </div>
+
+  <div class="schema-panel" id="schemaPanel">
+    <img src="schema.png" alt="Database schema diagram">
+  </div>
+
+  <div class="editor-section">
+    <div class="editor-toolbar">
+      <span class="title">query.sql</span>
+    </div>
+    <div class="editor-area">
+      <textarea id="sqlInput" placeholder="SELECT * FROM prof LIMIT 10;" spellcheck="false"></textarea>
+    </div>
+    <div class="action-bar">
+      <button class="btn btn-run" id="runBtn" onclick="runQuery()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        Run
+        <span class="shortcut">⌘↵</span>
+      </button>
+      <button class="btn btn-csv" id="csvBtn" onclick="downloadCSV()" style="display:none">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        CSV
+      </button>
+      <button class="btn btn-outline" onclick="clearAll()">Clear</button>
+      <div class="status" id="status"></div>
+    </div>
+  </div>
+
+  <div id="results">
+    <div class="results-section">
+      <div class="empty-state">
+        <div class="icon">⟩_</div>
+        <p>Write a SQL query and press <kbd>⌘ Enter</kbd> to execute</p>
+        <div class="examples">
+          <span class="example-chip" onclick="setQuery('SELECT * FROM prof LIMIT 20')">prof table</span>
+          <span class="example-chip" onclick="setQuery('SELECT table_name FROM information_schema.tables')">list tables</span>
+          <span class="example-chip" onclick="setQuery('SELECT * FROM lab LIMIT 20')">labs</span>
+          <span class="example-chip" onclick="setQuery('SELECT p.lastname, p.firstname, COUNT(sp.id_pub) as n_pubs\nFROM prof p\nJOIN sciper_pub sp USING (sciper)\nGROUP BY p.lastname, p.firstname\nORDER BY n_pubs DESC\nLIMIT 20')">top publishers</span>
+          <span class="example-chip" onclick="setQuery('DESCRIBE prof')">describe prof</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let lastData = null;
+
+function toggleSchema() {
+  const panel = document.getElementById('schemaPanel');
+  const btn = document.getElementById('schemaBtn');
+  panel.classList.toggle('open');
+  btn.classList.toggle('active');
+}
+
+const textarea = document.getElementById('sqlInput');
+const apiUrlInput = document.getElementById('apiUrl');
+
+// Keyboard shortcut: Cmd/Ctrl + Enter to run
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+    e.preventDefault();
+    runQuery();
+  }
+});
+
+// Tab key inserts spaces in textarea
+textarea.addEventListener('keydown', (e) => {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    textarea.value = textarea.value.substring(0, start) + '  ' + textarea.value.substring(end);
+    textarea.selectionStart = textarea.selectionEnd = start + 2;
+  }
+});
+
+function setQuery(sql) {
+  textarea.value = sql;
+  textarea.focus();
+}
+
+function getApiUrl() {
+  const val = apiUrlInput.value.trim().replace(/\/+$/, '');
+  return val || window.location.origin;  // default to same origin
+}
+
+function setStatus(text, type) {
+  const el = document.getElementById('status');
+  el.innerHTML = `<span class="indicator ${type}"></span> ${text}`;
+}
+
+const DISPLAY_LIMIT = 1000;
+
+async function runQuery() {
+  const sql = textarea.value.trim();
+  if (!sql) return;
+
+  const btn = document.getElementById('runBtn');
+  btn.disabled = true;
+  setStatus('Executing…', 'loading');
+  document.getElementById('csvBtn').style.display = 'none';
+
+  const start = performance.now();
+
+  try {
+    const resp = await fetch(`${getApiUrl()}/sql`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: sql, display_limit: DISPLAY_LIMIT })
+    });
+
+    const elapsed = ((performance.now() - start) / 1000).toFixed(2);
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(err.detail || 'Query failed');
+    }
+
+    const data = await resp.json();
+    lastData = data;
+
+    if (!data.columns || !data.rows) {
+      throw new Error('Unexpected response format');
+    }
+
+    const truncated = data.total_rows != null && data.total_rows > data.rows.length;
+    renderTable(data.columns, data.rows, elapsed, truncated ? data.total_rows : null);
+    const rowLabel = truncated
+      ? `${data.rows.length} of ${data.total_rows.toLocaleString()} rows (download CSV for full data)`
+      : `${data.rows.length} rows`;
+    setStatus(`${rowLabel} · ${elapsed}s`, 'success');
+    document.getElementById('csvBtn').style.display = '';
+
+  } catch (err) {
+    renderError(err.message);
+    setStatus('Error', 'error');
+    lastData = null;
+    document.getElementById('csvBtn').style.display = 'none';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function renderTable(columns, rows, elapsed, totalRows) {
+  const resultsDiv = document.getElementById('results');
+
+  let headerTags = `
+    <span class="tag tag-rows">${rows.length} rows</span>
+    <span class="tag tag-cols">${columns.length} cols</span>
+    <span class="tag tag-time">${elapsed}s</span>
+  `;
+  if (totalRows != null) {
+    headerTags += `<span class="tag tag-truncated">showing ${rows.length} of ${totalRows.toLocaleString()} — download CSV for full data</span>`;
+  }
+
+  const ths = columns.map(c => `<th>${esc(c)}</th>`).join('');
+  const trs = rows.map(row => {
+    const tds = columns.map(c => {
+      const val = row[c];
+      if (val === null || val === undefined) {
+        return `<td class="null-val">NULL</td>`;
+      }
+      const str = typeof val === 'object' ? JSON.stringify(val) : String(val);
+      return `<td title="${esc(str)}">${esc(str)}</td>`;
+    }).join('');
+    return `<tr>${tds}</tr>`;
+  }).join('');
+
+  resultsDiv.innerHTML = `
+    <div class="results-section">
+      <div class="results-header">${headerTags}</div>
+      <div class="table-wrap">
+        <table><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>
+      </div>
+    </div>
+  `;
+}
+
+function renderError(msg) {
+  document.getElementById('results').innerHTML = `
+    <div class="results-section">
+      <div class="error-box">${esc(msg)}</div>
+    </div>
+  `;
+}
+
+async function downloadCSV() {
+  const sql = textarea.value.trim();
+  if (!sql) return;
+
+  const csvBtn = document.getElementById('csvBtn');
+  csvBtn.disabled = true;
+  csvBtn.textContent = '⏳ Downloading…';
+
+  try {
+    const resp = await fetch(`${getApiUrl()}/sql/csv`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: sql })
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(err.detail || 'Download failed');
+    }
+
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'query_result.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    alert('CSV download failed: ' + err.message);
+  } finally {
+    csvBtn.disabled = false;
+    csvBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> CSV`;
+  }
+}
+
+function clearAll() {
+  textarea.value = '';
+  lastData = null;
+  document.getElementById('csvBtn').style.display = 'none';
+  document.getElementById('status').innerHTML = '';
+  document.getElementById('results').innerHTML = `
+    <div class="results-section">
+      <div class="empty-state">
+        <div class="icon">⟩_</div>
+        <p>Write a SQL query and press <kbd>⌘ Enter</kbd> to execute</p>
+        <div class="examples">
+          <span class="example-chip" onclick="setQuery('SELECT * FROM prof LIMIT 20')">prof table</span>
+          <span class="example-chip" onclick="setQuery('SELECT table_name FROM information_schema.tables')">list tables</span>
+          <span class="example-chip" onclick="setQuery('SELECT * FROM lab LIMIT 20')">labs</span>
+          <span class="example-chip" onclick="setQuery('SELECT p.lastname, p.firstname, COUNT(sp.id_pub) as n_pubs\\nFROM prof p\\nJOIN sciper_pub sp USING (sciper)\\nGROUP BY p.lastname, p.firstname\\nORDER BY n_pubs DESC\\nLIMIT 20')">top publishers</span>
+          <span class="example-chip" onclick="setQuery('DESCRIBE prof')">describe prof</span>
+        </div>
+      </div>
+    </div>
+  `;
+  textarea.focus();
+}
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+</script>
+</body>
+</html>

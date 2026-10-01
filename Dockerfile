@@ -17,6 +17,7 @@ RUN pip install /app/code/dspace-rest-python
 
 # Copy application code
 COPY main.py api.py start.sh ./
+COPY static ./static
 
 COPY .env .
 
